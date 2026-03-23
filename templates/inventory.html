@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在庫管理システム</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .stock-input { width: 80px; }
+        .table-container { margin-top: 20px; }
+    </style>
+</head>
+<body class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">在庫管理システム</h1>
+        <a href="/scanner" class="btn btn-primary btn-lg">📷 QRスキャンで出庫</a>
+    </div>
+
+    <div class="card card-body mb-4 shadow-sm bg-light">
+        <h2 class="h5 mb-3">新規商品の登録</h2>
+        <form action="/add" method="POST" class="row g-2">
+            <div class="col-md-2">
+                <input type="number" name="item_id" class="form-control" placeholder="商品コード" required>
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="item_name" class="form-control" placeholder="商品名" required>
+            </div>
+            <div class="col-md-2">
+                <input type="number" name="stock_count" class="form-control" placeholder="初期在庫" value="0">
+            </div>
+            <div class="col-md-2">
+                <input type="text" name="shelf_no" class="form-control" placeholder="棚番号">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-success w-100">登録</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="row mb-3 align-items-center">
+        <div class="col-auto">
+            <label for="common_stock" class="col-form-label">更新用数値入力:</label>
+        </div>
+        <div class="col-auto">
+            <input type="number" id="common_stock" class="form-control stock-input" placeholder="個数">
+        </div>
+        <div class="col-auto">
+            <span class="text-muted small">※下の「在庫更新」ボタンを押すと、この数値に書き換わります</span>
+        </div>
+    </div>
+
+    <div class="table-responsive table-container">
+        <table class="table table-striped table-bordered shadow-sm">
+            <thead class="table-dark text-center">
+                <tr>
+                    <th>商品コード</th>
+                    <th>商品名</th>
+                    <th>現在の在庫</th>
+                    <th>棚番号</th>
+                    <th>在庫操作</th>
+                    <th>管理</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="text-center">{{ item['item_id'] }}</td>
+                    <td>{{ item['item_name'] }}</td>
+                    <td class="text-center">
+                        <span class="badge {{ 'bg-danger' if item['stock_count'] < 10 else 'bg-success' }}" style="font-size: 1rem;">
+                            {{ item['stock_count'] }}
+                        </span>
+                    </td>
+                    <td class="text-center">{{ item['shelf_no'] or '-' }}</td>
+                    <td class="text-center">
+                        <form action="{{ url_for('update', item_id=item['item_id']) }}" method="POST" class="d-inline">
+                            <input type="hidden" name="new_stock" class="target-input">
+                            <button type="submit" class="btn btn-outline-primary btn-sm" onclick="copyValue(this)">在庫更新</button>
+                        </form>
+                    </td>
+                    <td class="text-center">
+                        <form action="{{ url_for('delete', item_id=item['item_id']) }}" method="POST" class="d-inline">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('本当に削除しますか？')">削除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+    /**
+     * 上部の共通入力欄にある数値を、各行のhidden inputにコピーしてから送信する
+     */
+    function copyValue(button) {
+        const val = document.getElementById('common_stock').value;
+        if (val === "") {
+            alert("更新する数値を入力してください。");
+            event.preventDefault(); // 送信を中止
+            return;
+        }
+        // このボタンと同じフォーム内にある .target-input を探して値をセット
+        const hiddenInput = button.form.querySelector('.target-input');
+        hiddenInput.value = val;
+    }
+    </script>
+</body>
+</html>

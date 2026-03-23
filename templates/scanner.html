@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QRスキャナー</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #preview { width: 100%; max-width: 500px; border: 3px solid #007bff; border-radius: 10px; }
+        .scanning-line { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: red; animation: scan 2s infinite; }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+    </style>
+</head>
+<body class="container mt-4 text-center">
+    <h1 class="mb-3">QRコードをスキャン</h1>
+    
+    <div class="position-relative d-inline-block">
+        <video id="preview" autoplay playsinline></video>
+        <div class="scanning-line"></div>
+    </div>
+    
+    <canvas id="canvas" style="display:none;"></canvas>
+    <div id="status" class="mt-3 h5 text-primary">カメラ起動中...</div>
+    
+    <div class="mt-4">
+        <a href="/" class="btn btn-secondary">一覧に戻る</a>
+    </div>
+
+    <script>
+        const video = document.getElementById('preview');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+        let isScanning = true;
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => {
+                video.srcObject = stream;
+                statusDiv.innerText = "QRコードを枠内に収めてください";
+                requestAnimationFrame(tick);
+            });
+
+        function tick() {
+            if (isScanning && video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.height = video.videoHeight;
+                canvas.width = video.videoWidth;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                if (code) {
+                    isScanning = false; // 二重送信防止
+                    sendData(code.data);
+                }
+            }
+            if (isScanning) requestAnimationFrame(tick);
+        }
+
+        function sendData(itemId) {
+            statusDiv.innerText = "送信中: " + itemId;
+            fetch('/reduce_post', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item_id: itemId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "success") {
+                    alert("出庫完了！ 商品コード: " + data.item_id);
+                } else {
+                    alert("エラー: " + data.message);
+                }
+                location.reload(); // 次のスキャンのためにリセット
+            });
+        }
+    </script>
+</body>
+</html>
