@@ -23,6 +23,11 @@ def init_db():
     conn.commit()
     conn.close()
 
+# --- ここから追加 ---　Render用
+with app.app_context():
+    init_db()
+# --- ここまで追加 ---
+
 # --- 画面表示（一覧・管理画面） ---
 @app.route('/')
 def index():
