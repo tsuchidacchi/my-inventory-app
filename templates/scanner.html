@@ -1,79 +1,61 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QRスキャナー</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        #preview { width: 100%; max-width: 500px; border: 3px solid #007bff; border-radius: 10px; }
-        .scanning-line { position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: red; animation: scan 2s infinite; }
-        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
-    </style>
-</head>
-<body class="container mt-4 text-center">
-    <h1 class="mb-3">QRコードをスキャン</h1>
-    
-    <div class="position-relative d-inline-block">
-        <video id="preview" autoplay playsinline></video>
-        <div class="scanning-line"></div>
-    </div>
-    
-    <canvas id="canvas" style="display:none;"></canvas>
-    <div id="status" class="mt-3 h5 text-primary">カメラ起動中...</div>
-    
-    <div class="mt-4">
-        <a href="/" class="btn btn-secondary">一覧に戻る</a>
-    </div>
+<select id="camera-selector" class="form-select mb-3">
+    <option value="">カメラを選択中...</option>
+</select>
 
-    <script>
-        const video = document.getElementById('preview');
-        const canvas = document.getElementById('canvas');
-        const context = canvas.getContext('2d');
-        const statusDiv = document.getElementById('status');
-        let isScanning = true;
+<video id="preview" autoplay playsinline></video>
 
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => {
-                video.srcObject = stream;
-                statusDiv.innerText = "QRコードを枠内に収めてください";
-                requestAnimationFrame(tick);
-            });
+<script>
+    const video = document.getElementById('preview');
+    const selector = document.getElementById('camera-selector');
+    let currentStream = null;
 
-        function tick() {
-            if (isScanning && video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.height = video.videoHeight;
-                canvas.width = video.videoWidth;
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
+    // 1. 利用可能なカメラ一覧を取得してプルダウンにセット
+    async function setupCameraSelector() {
+        // 一度ダミーで起動して許可を得ないと、ラベル（カメラ名）が取得できない場合があります
+        await navigator.mediaDevices.getUserMedia({ video: true });
+        
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
 
-                if (code) {
-                    isScanning = false; // 二重送信防止
-                    sendData(code.data);
-                }
+        selector.innerHTML = ''; // プルダウンをクリア
+        videoDevices.forEach((device, index) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `カメラ ${index + 1}`;
+            selector.appendChild(option);
+        });
+
+        // 最初のカメラで起動
+        if (videoDevices.length > 0) {
+            startCamera(videoDevices[0].deviceId);
+        }
+    }
+
+    // 2. 指定したIDのカメラを起動
+    async function startCamera(deviceId) {
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop()); // 前のカメラを止める
+        }
+
+        const constraints = {
+            video: {
+                deviceId: { exact: deviceId } // ここでIDを厳密に指定
             }
-            if (isScanning) requestAnimationFrame(tick);
-        }
+        };
 
-        function sendData(itemId) {
-            statusDiv.innerText = "送信中: " + itemId;
-            fetch('/reduce_post', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ item_id: itemId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === "success") {
-                    alert("出庫完了！ 商品コード: " + data.item_id);
-                } else {
-                    alert("エラー: " + data.message);
-                }
-                location.reload(); // 次のスキャンのためにリセット
-            });
+        try {
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = currentStream;
+        } catch (err) {
+            console.error("カメラの起動に失敗しました:", err);
         }
-    </script>
-</body>
-</html>
+    }
+
+    // プルダウンが変更されたらカメラを切り替え
+    selector.addEventListener('change', (e) => {
+        startCamera(e.target.value);
+    });
+
+    // 起動時に実行
+    setupCameraSelector();
+</script>
